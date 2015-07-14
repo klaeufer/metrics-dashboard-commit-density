@@ -25,12 +25,8 @@ import spray.util._
  * Created by sshilpika on 6/30/15.
  */
 
-case class JsonPResult(commitInfo: List[JsonPResult1])
-case class JsonPResult1(date: String, commitLines: Double)
-object JsonPResultProtocol1 {
-  import spray.json.DefaultJsonProtocol._
-  implicit val gitResult = jsonFormat(JsonPResult1,"date","commitLines")
-}
+case class JsonPResult(commitInfo: JsValue)
+
 object JsonPResultProtocol {
   import spray.json.DefaultJsonProtocol._
   implicit val gitResult = jsonFormat(JsonPResult,"commitInfo")
@@ -53,7 +49,7 @@ object CommitInfo{
 trait CommitDensityService extends HttpService{
   val sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
-  def connect(repo: String, branch:String): Future[List[JsonPResult1]] = {
+  def connect(repo: String, branch:String, displayOption: String): Future[JsValue] = {
     import reactivemongo.api._
 
     //get an instance of the driver
@@ -68,7 +64,8 @@ trait CommitDensityService extends HttpService{
     val sorted = added.map(p => p.sorted)
 
     val collInfo = sorted.flatMap(p => {
-      val res1 = Future.sequence(p.map/*foldLeft(Nil: List[(String,String)])*/(collName=> {
+      //res1 gets data from the DB and saves it in a list of (commitDate, LOC, weekStartDate, weekEndDate)
+      val res1 = Future.sequence(p.map(collName=> {
         val coll = db.collection[BSONCollection](collName)
         val collectionsList = coll.find(BSONDocument()).sort(BSONDocument("date" -> 1)).cursor[CommitInfo].collect[List]()
 
@@ -84,11 +81,15 @@ trait CommitDensityService extends HttpService{
 
         res
       }))
+
+
+
+
+
+      //below are the calculations for density metrics
       res1.map(p => {
-        p.foldLeft(Nil:List[JsonPResult1]){(str, x) => {
-          /*x.foldLeft((0,0)){(tupleR,c) => {
-            c
-          }}*/
+        p.foldLeft(Nil:List[JsValue]){(str, x) => {
+
           val lis1 = x.toList.sortBy(x => x._1)
           val previousCommitLoc = if(p.indexOf(x)==0){
             0
@@ -107,49 +108,35 @@ trait CommitDensityService extends HttpService{
           val totalMillis = result.foldLeft(0L:Long){(l,z) => l+z._1}
           val finalResult = (result.map(z => z._1*z._2).sum)/totalMillis
           val r = finalResult.toDouble/1000
-          val finalDisplay = lis1.foldLeft(new StringBuilder(""))((strB, x) => {
-            val date = x._1
-            val loc = x._2
 
-            strB.append(s"""|{
-              |  "date": $date,
-              |  "commitLines": $loc
-              |}""".stripMarginWithNewline("\n"))
-          })
+          val startDate = lis1(0)._3
+          val endDate = lis1(0)._4
 
-          /*str.append(s"""|{
-              |  "commitInfo": $finalDisplay,
-              |  "KLOC": $r
-              |}""".stripMarginWithNewline("\n"))*/
-          str:+JsonPResult1(finalDisplay.mkString,r)
+          val resultF = s"""{"start_date": "$startDate", "end_date": "$endDate", "KLOC": $r}""".parseJson
+          str:+resultF
 
         }}
       })
     })
-    collInfo//.map(x=> x)
+    collInfo.map(x=> x.toJson)
 
   }
 
 
 
 
-  val myRoute = path(/*Segment / */Segment / Segment) { (/*user,*/ repo, branch) =>
+  val myRoute = path(Segment / Segment) { ( repo, branch) =>
     get {
-      respondWithMediaType(`text/plain`) {
-        // XML is marshalled to `text/xml` by default, so we simply override here
         optionalHeaderValueByName("Authorization") { (accessToken) =>
-          //parameters('displayBy) { (displayOption) =>
           jsonpWithParameter("jsonp") {
             import JsonPResultProtocol._
-            import JsonPResultProtocol1._
             import spray.httpx.SprayJsonSupport._
-            onComplete(connect(repo, branch/*, displayOption, accessToken*/)) {
+            onComplete(connect(repo, branch, "week")) {
               case Success(value) => complete(JsonPResult(value))
               case Failure(value) => complete("Request to github failed with value : " + value)
             }
           }
         }
-      }
     }
   }
 }

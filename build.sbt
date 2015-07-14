@@ -19,7 +19,8 @@ libraryDependencies ++= {
     "com.typesafe.akka"   %%  "akka-actor"    % akkaV,
     "com.typesafe.akka"   %%  "akka-testkit"  % akkaV   % Test,
     "org.specs2"          %%  "specs2-core"   % "2.3.11" % Test,
-    "org.reactivemongo" %% "reactivemongo" % "0.11.2"
+    "org.reactivemongo" %% "reactivemongo" % "0.11.2",
+    "org.scalaz" %% "scalaz-core" % "7.0.6"
   )
 }
 
