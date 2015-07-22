@@ -1,14 +1,12 @@
 import java.io.PrintWriter
-import java.text.SimpleDateFormat
 import java.time.{Duration, LocalDateTime, ZoneId, Instant}
-import java.time.temporal.{TemporalAdjusters, ChronoUnit}
+import java.time.temporal.{TemporalAdjusters}
 import akka.actor.Actor
 import reactivemongo.api.MongoDriver
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.bson.{BSONDocumentReader, BSONDocument}
 import spray.routing.HttpService
 import spray.json._
-import DefaultJsonProtocol._
 import util._
 import concurrent.ExecutionContext.Implicits._
 import scala.concurrent.{Future}
@@ -17,11 +15,18 @@ import scala.concurrent.{Future}
  * Created by sshilpika on 6/30/15.
  */
 
-case class JsonPResult(commitInfo: JsValue)
+case class IssueState(Open:Int, Close:Int)
+case class LocIssue(startDate: String, endDate:String,kloc:Long, issues: IssueState)
 
-object JsonPResultProtocol {
+object JProtocol extends DefaultJsonProtocol{
+  implicit val IssueInfoResult:RootJsonFormat[IssueState] = jsonFormat(IssueState,"Open","Close")
+  implicit val klocFormat:RootJsonFormat[LocIssue] = jsonFormat(LocIssue,"StartDate","End Date","KLOC","Issues")
+}
+
+case class JsonPResult(commitInfo: JsValue)
+object JsonPProtocol{
   import spray.json.DefaultJsonProtocol._
-  implicit val gitResult = jsonFormat(JsonPResult,"commitInfo")
+  implicit val gitResult = jsonFormat(JsonPResult,"DensityMetrics")
 }
 case class CommitInfo(date: String,loc: Int, filename: String, rangeLoc: Long)
 
@@ -56,10 +61,8 @@ object ReactiveMongo {
 }
 
 trait CommitDensityService extends HttpService{
-  val sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
-
-  def getIssues(user: String, repo: String, branch:String, groupBy: String, klocList:Map[Instant,(Instant,Long,(Int,Int))]): Future[String] ={
+  def getIssues(user: String, repo: String, branch:String, groupBy: String, klocList:Map[Instant,(Instant,Long,(Int,Int))]): Future[JsValue] ={
     val driver = ReactiveMongo.driver
     val connection = ReactiveMongo.connection
     //gets a reference of the database for commits
@@ -101,7 +104,9 @@ trait CommitDensityService extends HttpService{
       })
 
     })
-    finalRes.map(_.toString)
+    //val jsonifyRes = finalRes.map(x => x.map(y => s"""{"StartDate":${y._1.toString},"EndDate": ${y._2._1.toString},"KLOC":${y._2._2/1000},"Issues":{"Open": ${y._2._3._1},"Closed":${y._2._3._2} """))
+    val jsonifyRes = finalRes.map(x => x.map(y => LocIssue(y._1.toString, y._2._1.toString,y._2._2/1000,IssueState(y._2._3._1,y._2._3._2))).toList)
+    jsonifyRes.map(x => {import JProtocol._;println(x);x.toJson})
   }
 
   def getKloc(user: String, repo: String, branch:String, groupBy: String): Future[Map[Instant,(Instant,Long,(Int,Int))]] = {
@@ -189,7 +194,7 @@ trait CommitDensityService extends HttpService{
 
   }
 
-  def dataForDensityMetrics(user: String, repo: String, branch:String, groupBy: String): Future[String] ={
+  def dataForDensityMetrics(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
 
     val kloc = getKloc(user, repo, branch, groupBy)
     kloc.flatMap(kloc1 => {
@@ -207,11 +212,11 @@ trait CommitDensityService extends HttpService{
     get {
         optionalHeaderValueByName("Authorization") { (accessToken) =>
           jsonpWithParameter("jsonp") {
-            import JsonPResultProtocol._
+            import JsonPProtocol._
             import spray.httpx.SprayJsonSupport._
             parameters('groupBy ? "week") {(groupBy) =>
               onComplete(dataForDensityMetrics(user, repo, branch, groupBy)) {
-                case Success(value) => complete(value)
+                case Success(value) => complete(JsonPResult(value))
                 case Failure(value) => complete("Request to github failed with value : " + value)
 
               }
@@ -228,3 +233,4 @@ class MyServiceActor extends Actor with CommitDensityService {
 
   def receive = runRoute(myRoute)
 }
+
