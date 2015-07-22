@@ -1,5 +1,5 @@
 import java.io.PrintWriter
-import java.time.{Duration, LocalDateTime, ZoneId, Instant}
+import java.time.{Duration, ZonedDateTime, ZoneId, Instant}
 import java.time.temporal.{TemporalAdjusters}
 import akka.actor.Actor
 import reactivemongo.api.MongoDriver
@@ -79,7 +79,7 @@ trait CommitDensityService extends HttpService{
         issuesList.map(issueDocList => {
           issueDocList.map(issueDoc => {
             val inst = Instant.parse(issueDoc.date)
-            val ldt = LocalDateTime.ofInstant(inst,ZoneId.of("UTC"))
+            val ldt = ZonedDateTime.ofInstant(inst,ZoneId.of("UTC"))
             val startDate = if(groupBy.equals("week")) //weekly
               inst.minus(Duration.ofDays(ldt.getDayOfWeek.getValue-1))
             else{//monthly
@@ -106,7 +106,7 @@ trait CommitDensityService extends HttpService{
     })
     //val jsonifyRes = finalRes.map(x => x.map(y => s"""{"StartDate":${y._1.toString},"EndDate": ${y._2._1.toString},"KLOC":${y._2._2/1000},"Issues":{"Open": ${y._2._3._1},"Closed":${y._2._3._2} """))
     val jsonifyRes = finalRes.map(x => x.map(y => LocIssue(y._1.toString, y._2._1.toString,y._2._2/1000,IssueState(y._2._3._1,y._2._3._2))).toList)
-    jsonifyRes.map(x => {import JProtocol._;println(x);x.sortBy(_.startDate).toJson})
+    jsonifyRes.map(x => {import JProtocol._;x.sortBy(_.startDate).toJson})
   }
 
   def getKloc(user: String, repo: String, branch:String, groupBy: String): Future[Map[Instant,(Instant,Long,(Int,Int))]] = {
@@ -130,39 +130,47 @@ trait CommitDensityService extends HttpService{
         val res = collectionsList.map(p => {
           //finding the start date of the week for this file
           val inst = Instant.parse(p(0).date)
-          val ldt = LocalDateTime.ofInstant(inst,ZoneId.of("UTC"))
+          val ldt = ZonedDateTime.ofInstant(inst,ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
           val startDate =
-            if(groupBy.equals("week")) //weekly
-              inst.minus(Duration.ofDays(ldt.getDayOfWeek.getValue-1))
-            else{//monthly
-              inst.minus(Duration.ofDays(ldt.getDayOfMonth-1))
+            if(groupBy.equals("week")) {//weekly
+              inst.minus(Duration.ofDays(ldt.getDayOfWeek.getValue - 1))
+            }else{//monthly
+              ldt.`with`(TemporalAdjusters.firstDayOfMonth()).toInstant//inst.minus(Duration.ofDays(ldt.getDayOfMonth-1))
             }
           val now = Instant.now()
           //val nowLdt = LocalDateTime.ofInstant(now,ZoneId.of("UTC"))
           //val startDateLdt = LocalDateTime.ofInstant(startDate,ZoneId.of("UTC"))
 
-          val dateRangeLength =if(groupBy.equals("week")) //weekly
-            (Duration.between(startDate, now).toDays/7).toInt+1
-          else{//monthly
-            (Duration.between(startDate, now).toDays/30).toInt+1
+          val dateRangeLength =if(groupBy.equals("week")){ //weekly
+            val daysBtw = Duration.between(startDate, now).toDays
+              if(daysBtw%7 !=0)
+                (daysBtw/7).toInt+1
+                else
+                (daysBtw/7).toInt
+          }else{//monthly
+            val zonedStart = ZonedDateTime.ofInstant(startDate,ZoneId.of("UTC"))
+            val zonedNow = ZonedDateTime.ofInstant(now,ZoneId.of("UTC"))
+            zonedNow.getMonthValue - zonedStart.getMonthValue+1
           }
           val l1 = List.fill(dateRangeLength)(("SD","ED",0L,(0,0))) // this is the tuple containing(startDate,EndDate,RangleLoc,(IssueOpen,IssueClosed)
 
           val dateRangeList = l1.scanLeft((startDate,startDate,0L,(0,0)))((a,x)=> {
-            if(groupBy.equals("week"))
-              (a._2,a._2.plus(Duration.ofDays(7)),x._3,x._4)
-            else{
-              val localDT = LocalDateTime.ofInstant(a._2,ZoneId.of("UTC"))
-              val offset = localDT.atZone(ZoneId.of("UTC")).getOffset
+            if (groupBy.equals("week")){
+              val startOfWeek = ZonedDateTime.ofInstant(a._2,ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
+              val endOfWeek = ZonedDateTime.ofInstant(a._2.plus(Duration.ofDays(7)),ZoneId.of("UTC")).withHour(23).withMinute(59).withSecond(59)
+              (startOfWeek.toInstant, endOfWeek.toInstant, x._3, x._4)
+            }else{
+              val localDT = ZonedDateTime.ofInstant(a._2,ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
               val firstDayOfMonth =
                 if(a._2== startDate)
                   localDT.`with`(TemporalAdjusters.firstDayOfMonth())
                 else
                   localDT.`with`(TemporalAdjusters.firstDayOfNextMonth())
-              val lastDayOfMonth = firstDayOfMonth.`with`(TemporalAdjusters.lastDayOfMonth())
-              (firstDayOfMonth.toInstant(offset),lastDayOfMonth.toInstant(offset),x._3,x._4)
+              val lastDayOfMonth = firstDayOfMonth.`with`(TemporalAdjusters.lastDayOfMonth()).withHour(23).withMinute(59).withSecond(59)
+              (firstDayOfMonth.toInstant(),lastDayOfMonth.toInstant(),x._3,x._4)
             }
-          })
+          }).tail
+
           //p is the list of CommitsInfo sorted by Date
           var previousLoc = 0
           val rangeLocList = dateRangeList.map( x => {
@@ -175,7 +183,9 @@ trait CommitDensityService extends HttpService{
               previousLoc = commitInfoForRange(commitInfoForRange.length - 1).loc
               val rangeCalulated = commitInfoForRange2.foldLeft(0L: Long) { (a, commitInf) => a + (commitInf.rangeLoc * commitInf.loc)}
               (x._1, x._2, rangeCalulated, x._4)
-            }else (x._1, x._2,0L,x._4)
+            }
+            else
+              (x._1, x._2,0L,x._4)
           })
           rangeLocList
         })
@@ -197,9 +207,11 @@ trait CommitDensityService extends HttpService{
   def dataForDensityMetrics(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
 
     val kloc = getKloc(user, repo, branch, groupBy)
+
     kloc.flatMap(kloc1 => {
       val writer = new PrintWriter(new java.io.File("store.txt"))
-      writer.write(kloc1.toString())
+      val k = kloc1.toList.sortBy(_._1)
+      writer.write(k.toString())
       writer.close()
       getIssues(user, repo, branch, groupBy, kloc1)})
 
