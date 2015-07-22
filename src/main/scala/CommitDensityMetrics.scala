@@ -16,7 +16,7 @@ import scala.concurrent.{Future}
  */
 
 case class IssueState(Open:Int, Close:Int)
-case class LocIssue(startDate: String, endDate:String,kloc:Long, issues: IssueState)
+case class LocIssue(startDate: String, endDate:String,kloc:Double, issues: IssueState)
 
 object JProtocol extends DefaultJsonProtocol{
   implicit val IssueInfoResult:RootJsonFormat[IssueState] = jsonFormat(IssueState,"Open","Close")
@@ -62,7 +62,7 @@ object ReactiveMongo {
 
 trait CommitDensityService extends HttpService{
 
-  def getIssues(user: String, repo: String, branch:String, groupBy: String, klocList:Map[Instant,(Instant,Long,(Int,Int))]): Future[JsValue] ={
+  def getIssues(user: String, repo: String, branch:String, groupBy: String, klocList:Map[Instant,(Instant,Double,(Int,Int))]): Future[JsValue] ={
     val driver = ReactiveMongo.driver
     val connection = ReactiveMongo.connection
     //gets a reference of the database for commits
@@ -99,17 +99,21 @@ trait CommitDensityService extends HttpService{
       //println(res)
       res.map(p => {
         val x = p.map(x => x.toList).flatten.groupBy(y => y._1)
-        x.map(y => (y._1,y._2.foldLeft((Instant.now(),0L,(0,0)):(Instant,Long,(Int,Int))){(acc,z) => (z._2._1,z._2._2,(z._2._3._1+acc._3._1,z._2._3._2+acc._3._2))}))
+        x.map(y => (y._1,y._2.foldLeft((Instant.now(),0.0D,(0,0)):(Instant,Double,(Int,Int))){(acc,z) => (z._2._1,z._2._2,(z._2._3._1+acc._3._1,z._2._3._2+acc._3._2))}))
         //c.map
       })
 
     })
     //val jsonifyRes = finalRes.map(x => x.map(y => s"""{"StartDate":${y._1.toString},"EndDate": ${y._2._1.toString},"KLOC":${y._2._2/1000},"Issues":{"Open": ${y._2._3._1},"Closed":${y._2._3._2} """))
-    val jsonifyRes = finalRes.map(x => x.map(y => LocIssue(y._1.toString, y._2._1.toString,y._2._2/1000,IssueState(y._2._3._1,y._2._3._2))).toList)
+    val jsonifyRes = finalRes.map(x => x.map(y => {
+      val totalRange = (Duration.between(y._1,y._2._1).toMillis).toDouble/1000
+      val kloc = ((y._2._2).toDouble/1000)/totalRange
+      LocIssue(y._1.toString, y._2._1.toString,kloc,IssueState(y._2._3._1,y._2._3._2))
+    }).toList)
     jsonifyRes.map(x => {import JProtocol._;x.sortBy(_.startDate).toJson})
   }
 
-  def getKloc(user: String, repo: String, branch:String, groupBy: String): Future[Map[Instant,(Instant,Long,(Int,Int))]] = {
+  def getKloc(user: String, repo: String, branch:String, groupBy: String): Future[Map[Instant,(Instant,Double,(Int,Int))]] = {
     val driver = ReactiveMongo.driver
     val connection = ReactiveMongo.connection
 
@@ -128,6 +132,7 @@ trait CommitDensityService extends HttpService{
 
         val res = collectionsList.map(p => {
           //finding the start date of the week for this file
+
           val inst = Instant.parse(p(0).date)
           val ldt = ZonedDateTime.ofInstant(inst,ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
           val startDate =
@@ -151,9 +156,9 @@ trait CommitDensityService extends HttpService{
             val zonedNow = ZonedDateTime.ofInstant(now,ZoneId.of("UTC"))
             zonedNow.getMonthValue - zonedStart.getMonthValue+1
           }
-          val l1 = List.fill(dateRangeLength)(("SD","ED",0L,(0,0))) // this is the tuple containing(startDate,EndDate,RangleLoc,(IssueOpen,IssueClosed)
+          val l1 = List.fill(dateRangeLength)(("SD","ED",0.0D,(0,0))) // this is the tuple containing(startDate,EndDate,RangleLoc,(IssueOpen,IssueClosed)
 
-          val dateRangeList = l1.scanLeft((startDate,startDate,0L,(0,0)))((a,x)=> {
+          val dateRangeList = l1.scanLeft((startDate,startDate,0.0D,(0,0)))((a,x)=> {
             if (groupBy.equals("week")){
               val startOfWeek = ZonedDateTime.ofInstant(a._2,ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
               val endOfWeek = ZonedDateTime.ofInstant(a._2.plus(Duration.ofDays(7)),ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
@@ -172,6 +177,7 @@ trait CommitDensityService extends HttpService{
 
           //p is the list of CommitsInfo sorted by Date
           var previousLoc = 0
+          val lastDateOfCommit = Instant.parse(p(p.length-1).date)
           val rangeLocList = dateRangeList.map( x => {
            // println(p)
             val commitInfoForRange1 = p.filter{dbVals => {val ins = Instant.parse(dbVals.date); ins.isAfter(x._1) && ins.isBefore(x._2)  }}
@@ -181,10 +187,14 @@ trait CommitDensityService extends HttpService{
                 commitInfoForRange.last.filename, Duration.between(Instant.parse(commitInfoForRange.last.date), x._2).toMillis / 1000)
               previousLoc = commitInfoForRange(commitInfoForRange.length - 1).loc
               val rangeCalulated = commitInfoForRange2.foldLeft(0L: Long) { (a, commitInf) => a + (commitInf.rangeLoc * commitInf.loc)}
-              (x._1, x._2, rangeCalulated, x._4)
+              (x._1, x._2, rangeCalulated.toDouble, x._4)
+            } else if (lastDateOfCommit.isBefore(x._1)){
+              println(p(p.length-1).filename+"!!!!!"+p(p.length-1).date)
+              val rangeLoc = (p(p.length-1).loc) * ((Duration.between(x._1,x._2).toMillis) toDouble) / 1000
+              (x._1,x._2,rangeLoc,x._4)
+            } else {
+              (x._1, x._2, 0.0D, x._4)
             }
-            else
-              (x._1, x._2,0L,x._4)
           })
           rangeLocList
         })
@@ -193,7 +203,7 @@ trait CommitDensityService extends HttpService{
       }))
       res1.map(p => {
         p.flatten.groupBy(x => x._1).map(y => (y._1,{
-          val rangeLoc = y._2.foldLeft(0L)((acc,z) => acc+z._3)
+          val rangeLoc = y._2.foldLeft(0D)((acc,z) => acc+z._3)
           (y._2(0)._2,rangeLoc,y._2(0)._4)
         }))
       })
