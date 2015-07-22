@@ -110,7 +110,6 @@ trait CommitDensityService extends HttpService{
   }
 
   def getKloc(user: String, repo: String, branch:String, groupBy: String): Future[Map[Instant,(Instant,Long,(Int,Int))]] = {
-    import reactivemongo.api._
     val driver = ReactiveMongo.driver
     val connection = ReactiveMongo.connection
 
@@ -193,7 +192,6 @@ trait CommitDensityService extends HttpService{
         res
       }))
       res1.map(p => {
-        //p.groupBy(x => x)
         p.flatten.groupBy(x => x._1).map(y => (y._1,{
           val rangeLoc = y._2.foldLeft(0L)((acc,z) => acc+z._3)
           (y._2(0)._2,rangeLoc,y._2(0)._4)
