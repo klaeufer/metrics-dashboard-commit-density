@@ -222,21 +222,6 @@ trait CommitDensityService extends HttpService{
   }
 }
 
-/*object KlocCollection extends App with CommitDensityService {
-  val lines = scala.io.Source.stdin.getLines
-  println("Enter username/reponame/branchname/groupBy")
-  val input = lines.next().split("/")
-
-  println(s"You entered: \nUsername: ${input(0)} \nReponame: ${input(1)} \nBranchname: ${input(2)}\n")
-  val f = dataForDensityMetrics(input(0),input(1),input(2),input(3))
-  f.onComplete{
-    case Success(value) => println(value)
-    case Failure(value) => println(value)
-      value.printStackTrace()
-  }
-}*/
-
-
 class MyServiceActor extends Actor with CommitDensityService {
 
   def actorRefFactory = context
