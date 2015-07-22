@@ -10,7 +10,7 @@ import scala.util.Properties
 object Boot extends App{
 
   implicit val system = ActorSystem("gitCommitDensity")
-  val service = system.actorOf(Props[MyServiceActor1],"git-file-commit-density")
+  val service = system.actorOf(Props[MyServiceActor],"git-file-commit-density")
   implicit val timeout = Timeout(60.seconds)
   val port = Properties.envOrElse("PORT","8080").toInt
   IO(Http) ? Http.Bind(service,interface = "0.0.0.0", port = port)

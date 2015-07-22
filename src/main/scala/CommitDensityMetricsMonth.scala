@@ -3,25 +3,14 @@ import java.time.{ZoneId, LocalDateTime, Instant}
 import java.time.temporal.ChronoUnit
 
 import akka.actor.Actor
-import akka.io.IO
-import akka.pattern.ask
-import akka.util.Timeout
 import reactivemongo.api.collections.bson.BSONCollection
-import reactivemongo.bson.{BSONDocumentReader, BSONObjectID, BSONDocument}
-import spray.can.Http
-import spray.http.HttpHeaders.RawHeader
-import spray.http.MediaTypes._
+import reactivemongo.bson.{BSONDocumentReader, BSONDocument}
 import spray.routing.HttpService
-import spray.http._
-import spray.httpx.RequestBuilding._
 import spray.json._
 import DefaultJsonProtocol._
-import spray.routing._
 import util._
 import concurrent.ExecutionContext.Implicits._
-import scala.concurrent.{Await, Future}
-//import com.mongodb.casbah.Imports._
-import spray.util._
+import scala.concurrent.{Future}
 import java.time.ZoneOffset
 import scalaz.Scalaz._
 /**
@@ -129,13 +118,13 @@ trait CommitDensityServiceMonth extends HttpService{
 
         yearMaps.map(p => {
           val jsonListMonths = p._2.foldLeft(Nil:List[JsValue]){(lis, monthkLocTuple) => {
-            val month = monthkLocTuple._1.toString
+            val month = monthkLocTuple._1.getValue
             val kLoc = monthkLocTuple._2
-            val JsResult = s"""{"Month": "$month", "KLOC": $kLoc}""".parseJson
+            val JsResult = s"""{"Month": $month, "KLOC": $kLoc}""".parseJson
             lis:+JsResult
           }}.toJson
           val year = p._1
-          val yearMonthsJs = s"""{"Year": $year, "CommitDensity": $jsonListMonths}""".parseJson
+          val yearMonthsJs = s"""{"$year": $jsonListMonths}""".parseJson
           yearMonthsJs
         })
 
