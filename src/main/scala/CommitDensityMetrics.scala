@@ -157,7 +157,7 @@ trait CommitDensityService extends HttpService{
           val dateRangeList = l1.scanLeft((startDate,startDate,0L,(0,0)))((a,x)=> {
             if (groupBy.equals("week")){
               val startOfWeek = ZonedDateTime.ofInstant(a._2,ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
-              val endOfWeek = ZonedDateTime.ofInstant(a._2.plus(Duration.ofDays(7)),ZoneId.of("UTC")).withHour(23).withMinute(59).withSecond(59)
+              val endOfWeek = ZonedDateTime.ofInstant(a._2.plus(Duration.ofDays(7)),ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
               (startOfWeek.toInstant, endOfWeek.toInstant, x._3, x._4)
             }else{
               val localDT = ZonedDateTime.ofInstant(a._2,ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
