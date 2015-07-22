@@ -106,7 +106,7 @@ trait CommitDensityService extends HttpService{
     })
     //val jsonifyRes = finalRes.map(x => x.map(y => s"""{"StartDate":${y._1.toString},"EndDate": ${y._2._1.toString},"KLOC":${y._2._2/1000},"Issues":{"Open": ${y._2._3._1},"Closed":${y._2._3._2} """))
     val jsonifyRes = finalRes.map(x => x.map(y => LocIssue(y._1.toString, y._2._1.toString,y._2._2/1000,IssueState(y._2._3._1,y._2._3._2))).toList)
-    jsonifyRes.map(x => {import JProtocol._;println(x);x.toJson})
+    jsonifyRes.map(x => {import JProtocol._;println(x);x.sortBy(_.startDate).toJson})
   }
 
   def getKloc(user: String, repo: String, branch:String, groupBy: String): Future[Map[Instant,(Instant,Long,(Int,Int))]] = {
