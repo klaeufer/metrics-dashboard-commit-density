@@ -133,11 +133,11 @@ trait CommitDensityService extends HttpService{
         val res = collectionsList.map(p => {
           //finding the start date of the week for this file
 
-          val inst = Instant.parse(p(0).date)
-          val ldt = ZonedDateTime.ofInstant(inst,ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
+          val firstDateOfCommit = Instant.parse(p(0).date)
+          val ldt = ZonedDateTime.ofInstant(firstDateOfCommit,ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0)
           val startDate =
             if(groupBy.equals("week")) {//weekly
-              inst.minus(Duration.ofDays(ldt.getDayOfWeek.getValue - 1))
+              firstDateOfCommit.minus(Duration.ofDays(ldt.getDayOfWeek.getValue - 1))
             }else{//monthly
               ldt.`with`(TemporalAdjusters.firstDayOfMonth()).toInstant//inst.minus(Duration.ofDays(ldt.getDayOfMonth-1))
             }
@@ -180,17 +180,20 @@ trait CommitDensityService extends HttpService{
           val lastDateOfCommit = Instant.parse(p(p.length-1).date)
           val rangeLocList = dateRangeList.map( x => {
            // println(p)
-            val commitInfoForRange1 = p.filter{dbVals => {val ins = Instant.parse(dbVals.date); ins.isAfter(x._1) && ins.isBefore(x._2)  }}
-            if(!commitInfoForRange1.isEmpty) {
+            val commitInfoForRange1 = p.filter{dbVals => {val ins = Instant.parse(dbVals.date); ins.isAfter(x._1) && ins.isBefore(x._2)  }}.sortBy(_.date)
+            if(!commitInfoForRange1.isEmpty) {// if commitsInfo is present within the range
               val commitInfoForRange = CommitInfo(x._1.toString, previousLoc, "", Duration.between(x._1, Instant.parse(commitInfoForRange1(0).date)).toMillis / 1000) +: commitInfoForRange1
               val commitInfoForRange2 = commitInfoForRange.take(commitInfoForRange.length - 1) :+ CommitInfo(commitInfoForRange.last.date, commitInfoForRange.last.loc,
                 commitInfoForRange.last.filename, Duration.between(Instant.parse(commitInfoForRange.last.date), x._2).toMillis / 1000)
               previousLoc = commitInfoForRange(commitInfoForRange.length - 1).loc
               val rangeCalulated = commitInfoForRange2.foldLeft(0L: Long) { (a, commitInf) => a + (commitInf.rangeLoc * commitInf.loc)}
               (x._1, x._2, rangeCalulated.toDouble, x._4)
-            } else if (lastDateOfCommit.isBefore(x._1)){
-              println(p(p.length-1).filename+"!!!!!"+p(p.length-1).date)
+            } else if (x._1.isAfter(lastDateOfCommit)){ // if the range falls after the last commit for the file
               val rangeLoc = (p(p.length-1).loc) * ((Duration.between(x._1,x._2).toMillis) toDouble) / 1000
+              (x._1,x._2,rangeLoc,x._4)
+            }else if (x._1.isAfter(firstDateOfCommit) && x._1.isBefore(lastDateOfCommit)){ // if the range falls inside the commits lifetime of the file but is empty
+              val commLis = p.filter{dbVals => {val ins = Instant.parse(dbVals.date); ins.isBefore(x._1)  }}
+              val rangeLoc = (commLis.sortBy(_.date).reverse(0).loc) * ((Duration.between(x._1,x._2).toMillis) toDouble) / 1000
               (x._1,x._2,rangeLoc,x._4)
             } else {
               (x._1, x._2, 0.0D, x._4)
