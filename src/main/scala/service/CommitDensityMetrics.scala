@@ -1,15 +1,16 @@
+package edu.luc.cs.metrics.defect.density.service
+
 import java.io.PrintWriter
-import java.time.{Duration, ZonedDateTime, ZoneId, Instant}
-import java.time.temporal.{TemporalAdjusters}
+import java.time.temporal.TemporalAdjusters
+import java.time.{Duration, Instant, ZoneId, ZonedDateTime}
 import akka.actor.Actor
-import reactivemongo.api.MongoDriver
 import reactivemongo.api.collections.bson.BSONCollection
-import reactivemongo.bson.{BSONDocumentReader, BSONDocument}
-import spray.routing.HttpService
+import reactivemongo.bson.{BSONDocument, BSONDocumentReader}
 import spray.json._
-import util._
-import concurrent.ExecutionContext.Implicits._
-import scala.concurrent.{Future}
+import spray.routing.HttpService
+import scala.concurrent.ExecutionContext.Implicits._
+import scala.concurrent.Future
+import scala.util._
 
 /**
  * Created by sshilpika on 6/30/15.
@@ -24,10 +25,12 @@ object JProtocol extends DefaultJsonProtocol{
 }
 
 case class JsonPResult(commitInfo: JsValue)
+
 object JsonPProtocol{
   import spray.json.DefaultJsonProtocol._
   implicit val gitResult = jsonFormat(JsonPResult,"DensityMetrics")
 }
+
 case class CommitInfo(date: String,loc: Int, filename: String, rangeLoc: Long)
 
 object CommitInfo{
@@ -53,84 +56,62 @@ object IssueInfo{
     }
   }
 }
-object ReactiveMongo {
-  //get an instance of the driver
-  //(creates an actor system)
-  val driver = new MongoDriver
-  val connection = driver.connection(List("localhost"))
-}
 
 trait CommitDensityService extends HttpService{
 
   def getIssues(user: String, repo: String, branch:String, groupBy: String, klocList:Map[Instant,(Instant,Double,(Int,Int))]): Future[JsValue] ={
-    val driver = ReactiveMongo.driver
-    val connection = ReactiveMongo.connection
+    val connection = mongoConnection
     //gets a reference of the database for commits
     val db = connection.db(user+"_"+repo+"_Issues")
     val collection = db.collectionNames
-    val added = collection.map(p => p.filter(!_.contains("system.indexes")))
-    //val sorted = added.map(p => p.sorted)
 
-    val finalRes = added.flatMap(p =>{
-      //println(p)
+    val finalRes = collection.map(_.filter(!_.contains("system.indexes"))) flatMap(p =>{
+
       val res = Future.sequence(p.map(collName => {
         val coll = db.collection[BSONCollection](collName)
-        val issuesList = coll.find(BSONDocument()).sort(BSONDocument("date" -> 1)).cursor[IssueInfo].collect[List]()
-        issuesList.map(issueDocList => {
-          issueDocList.map(issueDoc => {
-            val inst = Instant.parse(issueDoc.date)
-            val ldt = ZonedDateTime.ofInstant(inst,ZoneId.of("UTC"))
-            val startDate = if(groupBy.equals("week")) //weekly
-              inst.minus(Duration.ofDays(ldt.getDayOfWeek.getValue-1))
-            else{//monthly
-              inst.minus(Duration.ofDays(ldt.getDayOfMonth-1))
-            }
-            //println(klocList+"!!!!!!!!!!"+startDate.toString.substring(0,11)+"!!!!!!!!!!"+klocList.keys.toList.filter(x => x.toString.contains(startDate.toString.substring(11))))
-            val startD = klocList.keys.toList.filter(x => x.toString.contains(startDate.toString.substring(0,11)))(0)
-            val mapValue =  klocList get startD  get//OrElse(0)
-            val openState =if(issueDoc.state.equals("open")) mapValue._3._1+1 else mapValue._3._1
-            val closeState = if(issueDoc.state.equals("close")) mapValue._3._2+1 else mapValue._3._2
-            klocList + (startD -> (mapValue._1,mapValue._2,(openState,closeState)))
+        val issuesListF = coll.find(BSONDocument()).sort(BSONDocument("date" -> 1)).cursor[IssueInfo].collect[List]()
+        issuesListF.map(_.map(issueDoc => {
+          val inst = Instant.parse(issueDoc.date)
+          val ldt = ZonedDateTime.ofInstant(inst, ZoneId.of("UTC"))
+          val startDate = if (groupBy.equals("week")) //weekly
+                inst.minus(Duration.ofDays(ldt.getDayOfWeek.getValue - 1))
+              else //monthly
+                inst.minus(Duration.ofDays(ldt.getDayOfMonth - 1))
 
-          })
-        })
+          val startD = klocList.keys.toList.filter(x => x.toString.contains(startDate.toString.substring(0, 11)))(0)
+          val mapValue = klocList get startD get //OrElse(0)
+          val openState = if (issueDoc.state.equals("open")) mapValue._3._1 + 1 else mapValue._3._1
+          val closeState = if (issueDoc.state.equals("close")) mapValue._3._2 + 1 else mapValue._3._2
+          klocList + (startD ->(mapValue._1, mapValue._2, (openState, closeState)))
+        }))
 
       })).map(_.flatten)
-      //println(res)
       res.map(p => {
-        val x = p.map(x => x.toList).flatten.groupBy(y => y._1)
+        val x = p.map(_.toList).flatten.groupBy(y => y._1)
         x.map(y => (y._1,y._2.foldLeft((Instant.now(),0.0D,(0,0)):(Instant,Double,(Int,Int))){(acc,z) => (z._2._1,z._2._2,(z._2._3._1+acc._3._1,z._2._3._2+acc._3._2))}))
-        //c.map
       })
-
     })
-    //val jsonifyRes = finalRes.map(x => x.map(y => s"""{"StartDate":${y._1.toString},"EndDate": ${y._2._1.toString},"KLOC":${y._2._2/1000},"Issues":{"Open": ${y._2._3._1},"Closed":${y._2._3._2} """))
-    val jsonifyRes = finalRes.map(x => x.map(y => {
+    val jsonifyRes = finalRes.map(_.map(y => {
       val totalRange = (Duration.between(y._1,y._2._1).toMillis).toDouble/1000
-      val kloc = ((y._2._2).toDouble/1000)/totalRange
-      LocIssue(y._1.toString, y._2._1.toString,kloc,IssueState(y._2._3._1,y._2._3._2))
+      LocIssue(y._1.toString, y._2._1.toString,((y._2._2)/1000)/totalRange,IssueState(y._2._3._1,y._2._3._2))
     }).toList)
     jsonifyRes.map(x => {import JProtocol._;x.sortBy(_.startDate).toJson})
   }
 
   def getKloc(user: String, repo: String, branch:String, groupBy: String): Future[Map[Instant,(Instant,Double,(Int,Int))]] = {
-    val driver = ReactiveMongo.driver
-    val connection = ReactiveMongo.connection
+    val connection = mongoConnection
 
     //gets a reference of the database for commits
     val db = connection.db(user+"_"+repo+"_"+branch)
     val collection = db.collectionNames
-    val added = collection.map(p => p.filter(!_.contains("system.indexes")))
-    //val sorted = added.map(p => p.sorted)
 
-
-    val collInfo = added.flatMap(p => {
+    collection.map(p => p.filter(!_.contains("system.indexes"))) flatMap(p => {
       //res1 gets data from the DB and saves it in a list of (commitDate, LOC, weekStartDate, weekEndDate)
-      val res1 = Future.sequence(p.map(collName=> {
+      Future.sequence(p.map(collName=> {
         val coll = db.collection[BSONCollection](collName)
         val collectionsList = coll.find(BSONDocument()).sort(BSONDocument("date" -> 1)).cursor[CommitInfo].collect[List]()
 
-        val res = collectionsList.map(p => {
+        collectionsList.map(p => {
           //finding the start date of the week for this file
 
           val firstDateOfCommit = Instant.parse(p(0).date)
@@ -142,9 +123,6 @@ trait CommitDensityService extends HttpService{
               ldt.`with`(TemporalAdjusters.firstDayOfMonth()).toInstant//inst.minus(Duration.ofDays(ldt.getDayOfMonth-1))
             }
           val now = Instant.now()
-          //val nowLdt = LocalDateTime.ofInstant(now,ZoneId.of("UTC"))
-          //val startDateLdt = LocalDateTime.ofInstant(startDate,ZoneId.of("UTC"))
-
           val dateRangeLength =if(groupBy.equals("week")){ //weekly
             val daysBtw = Duration.between(startDate, now).toDays
               if(daysBtw%7 !=0)
@@ -178,8 +156,7 @@ trait CommitDensityService extends HttpService{
           //p is the list of CommitsInfo sorted by Date
           var previousLoc = 0
           val lastDateOfCommit = Instant.parse(p(p.length-1).date)
-          val rangeLocList = dateRangeList.map( x => {
-           // println(p)
+          dateRangeList.map( x => {
             val commitInfoForRange1 = p.filter{dbVals => {val ins = Instant.parse(dbVals.date); ins.isAfter(x._1) && ins.isBefore(x._2)  }}.sortBy(_.date)
             if(!commitInfoForRange1.isEmpty) {// if commitsInfo is present within the range
               val commitInfoForRange = CommitInfo(x._1.toString, previousLoc, "", Duration.between(x._1, Instant.parse(commitInfoForRange1(0).date)).toMillis / 1000) +: commitInfoForRange1
@@ -199,20 +176,13 @@ trait CommitDensityService extends HttpService{
               (x._1, x._2, 0.0D, x._4)
             }
           })
-          rangeLocList
         })
-
-        res
-      }))
-      res1.map(p => {
-        p.flatten.groupBy(x => x._1).map(y => (y._1,{
+      })) map(_.flatten.groupBy(_._1) map(y => (y._1,{
           val rangeLoc = y._2.foldLeft(0D)((acc,z) => acc+z._3)
           (y._2(0)._2,rangeLoc,y._2(0)._4)
         }))
-      })
+      )
     })
-    collInfo
-
   }
 
   def dataForDensityMetrics(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
