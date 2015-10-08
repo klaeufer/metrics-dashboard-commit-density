@@ -23,15 +23,15 @@ case class IssueState(Open:Int, Close:Int)
 case class LocIssue(startDate: String, endDate:String,kloc:Double, issues: IssueState)
 
 object JProtocol extends DefaultJsonProtocol{
-  implicit val IssueInfoResult:RootJsonFormat[IssueState] = jsonFormat(IssueState,"Open","Close")
-  implicit val klocFormat:RootJsonFormat[LocIssue] = jsonFormat(LocIssue,"StartDate","End Date","KLOC","Issues")
+  implicit val IssueInfoResult:RootJsonFormat[IssueState] = jsonFormat(IssueState,"open","closed")
+  implicit val klocFormat:RootJsonFormat[LocIssue] = jsonFormat(LocIssue,"start_date","end_date","kloc","issues")
 }
 
 case class JsonPResult(commitInfo: JsValue)
 
 object JsonPProtocol{
   import spray.json.DefaultJsonProtocol._
-  implicit val gitResult = jsonFormat(JsonPResult,"DensityMetrics")
+  implicit val gitResult = jsonFormat(JsonPResult,"defectDensity")
 }
 
 case class CommitInfo(date: String,loc: Int, filename: String, rangeLoc: Long)
