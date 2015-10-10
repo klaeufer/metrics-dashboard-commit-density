@@ -165,11 +165,11 @@ trait CommitDensityService extends HttpService{
           val startDate1 = ZonedDateTime.ofInstant(startDate2, ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0).toInstant
           //println(startDate1+" THis is start date!!!!!")
           if(klocList.keys.exists(_ == startDate1)) {
-            val startD = klocList.keys.toList.filter(x => {
+            val startD = klocList.keys.toIterable.filter(x => {
               /*println(x.toString+" This is x string "+startDate1);*/ x.toString.contains(startDate1.toString.substring(0, 11))
             })
             //println("STARDDDDD "+startD)
-            val startCheck = startD(0)
+            val startCheck = startD.head
             val mapValue = klocList get startCheck get //OrElse(0)
             val openState = if (issueDoc.state.equals("open")) mapValue._3._1 + 1 else mapValue._3._1
             val closeState = if (issueDoc.state.equals("closed")) mapValue._3._2 + 1 else mapValue._3._2
