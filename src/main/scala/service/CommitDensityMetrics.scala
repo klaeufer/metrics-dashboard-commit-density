@@ -181,7 +181,7 @@ trait CommitDensityService extends HttpService{
 
       })).map(_.flatten)
       res.map(p => {
-        val x = p.map(_.toIterable).flatten.groupBy(y => y._1)
+        val x = p.map(_.toIterator).toIterable.flatten.groupBy(y => y._1)
         x.map(y => (y._1,y._2.foldLeft((Instant.now(),0.0D,(0,0)):(Instant,Double,(Int,Int))){(acc,z) => (z._2._1,z._2._2,(z._2._3._1+acc._3._1,z._2._3._2+acc._3._2))}))
       })
     })
