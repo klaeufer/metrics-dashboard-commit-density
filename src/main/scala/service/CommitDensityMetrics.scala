@@ -188,9 +188,9 @@ trait CommitDensityService extends HttpService{
     val jsonifyRes = finalRes.map(_.map(y => {
       val totalRange = (Duration.between(y._1,y._2._1).toMillis).toDouble/1000
       LocIssue(y._1.toString, y._2._1.toString,((y._2._2)/1000)/totalRange,IssueState(y._2._3._1,y._2._3._2))
-    }).toList)
+    }).toIterable)
 
-    jsonifyRes.map(x => {/*println("jsonify result"+x);*/import JProtocol._;x.sortBy(_.startDate).toJson})
+    jsonifyRes.map(x => {/*println("jsonify result"+x);*/import JProtocol._;x/*.sortBy(_.startDate)*/.toJson})
   }
 
 
