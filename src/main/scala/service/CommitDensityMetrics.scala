@@ -165,7 +165,7 @@ trait CommitDensityService extends HttpService{
           val startDate1 = ZonedDateTime.ofInstant(startDate2, ZoneId.of("UTC")).withHour(0).withMinute(0).withSecond(0).toInstant
           //println(startDate1+" THis is start date!!!!!")
           if(klocList.keys.exists(_ == startDate1)) {
-            val startD = klocList.keys.toIterable.filter(x => {
+            val startD = klocList.keys.filter(x => {
               /*println(x.toString+" This is x string "+startDate1);*/ x.toString.contains(startDate1.toString.substring(0, 11))
             })
             //println("STARDDDDD "+startD)
@@ -173,7 +173,7 @@ trait CommitDensityService extends HttpService{
             val mapValue = klocList get startCheck get //OrElse(0)
             val openState = if (issueDoc.state.equals("open")) mapValue._3._1 + 1 else mapValue._3._1
             val closeState = if (issueDoc.state.equals("closed")) mapValue._3._2 + 1 else mapValue._3._2
-            klocList + (startCheck ->(mapValue._1, mapValue._2, (openState, closeState)))
+            klocList + (startCheck ->(mapValue._1, mapValue._2, (openState, closeState))) //updates old value with new value
           }else{
             klocList //+ (startCheck ->(mapValue._1, mapValue._2, (openState, closeState)))
           }
@@ -181,8 +181,8 @@ trait CommitDensityService extends HttpService{
 
       })).map(_.flatten)
       res.map(p => {
-        val x = p.map(_.toIterator).toIterable.flatten.groupBy(y => y._1)
-        x.map(y => (y._1,y._2.foldLeft((Instant.now(),0.0D,(0,0)):(Instant,Double,(Int,Int))){(acc,z) => (z._2._1,z._2._2,(z._2._3._1+acc._3._1,z._2._3._2+acc._3._2))}))
+        val x = p/*.map(_.toIterable)*/.toIterable.flatten.groupBy(y => y._1)
+        x.toIterable.map(y => (y._1,y._2.foldLeft((Instant.now(),0.0D,(0,0)):(Instant,Double,(Int,Int))){(acc,z) => (z._2._1,z._2._2,(z._2._3._1+acc._3._1,z._2._3._2+acc._3._2))}))
       })
     })
     val jsonifyRes = finalRes.map(_.map(y => {
@@ -663,6 +663,18 @@ trait CommitDensityService extends HttpService{
     result
   }
 
+  def getDataForDensityMetrics(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
+    import com.mongodb.casbah.Imports._
+    val mongoClient = MongoClient("localhost", 27017)
+    val db = mongoClient(user + "_" + repo + "_" + branch)
+    val coll = db("system_indexes_defect_density")
+    val result = coll.findOne(MongoDBObject("id" -> "1")).toList map(y => {
+      y.getAs[String]("defectDensity").getOrElse("")})
+
+    //println(result)
+    Future{result(0).parseJson}
+  }
+
 
 
 
@@ -673,7 +685,7 @@ trait CommitDensityService extends HttpService{
             import JsonPProtocol._
             import spray.httpx.SprayJsonSupport._
             parameters('groupBy ? "week") {(groupBy) =>
-              onComplete(dataForDensityMetrics(user, repo, branch, groupBy)) {
+              onComplete(getDataForDensityMetrics(user, repo, branch, groupBy)) {
                 case Success(value) => complete(JsonPResult(value))
                 case Failure(value) => complete("Request to github failed with value : " + value)
 
