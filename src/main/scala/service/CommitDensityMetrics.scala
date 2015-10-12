@@ -181,7 +181,16 @@ trait CommitDensityService extends HttpService{
 
       })).map(_.flatten)
       res.map(p => {
-        val x = p/*.map(_.toIterable)*/.toIterable.flatten.groupBy(y => y._1)
+        val x = p/*.map(_.toIterable)*/.toIterable.flatten.groupBy(y => y._1)/*.foldLeft(Nil:Iterable[(Instant,(Instant,Double,(Int,Int)))]){(i,res) => {
+          val b = i.toIterator.duplicate
+          val index = b._1.indexOf(res)
+          if(index != -1){
+            val b1 = b._2.duplicate
+
+          }else{
+            b._2++List(res).toIterator
+          }
+        }}*/
         x.toIterable.map(y => (y._1,y._2.foldLeft((Instant.now(),0.0D,(0,0)):(Instant,Double,(Int,Int))){(acc,z) => (z._2._1,z._2._2,(z._2._3._1+acc._3._1,z._2._3._2+acc._3._2))}))
       })
     })
@@ -667,7 +676,7 @@ trait CommitDensityService extends HttpService{
     import com.mongodb.casbah.Imports._
     val mongoClient = MongoClient("localhost", 27017)
     val db = mongoClient(user + "_" + repo + "_" + branch)
-    val coll = db("system_indexes_defect_density")
+    val coll = db("system_indexes_defect_density_"+groupBy)
     val result = coll.findOne(MongoDBObject("id" -> "1")).toList map(y => {
       y.getAs[String]("defectDensity").getOrElse("")})
 
