@@ -675,8 +675,8 @@ trait CommitDensityService extends HttpService{
   def getDataForDensityMetrics(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
     import com.mongodb.casbah.Imports._
     val mongoClient = MongoClient("localhost", 27017)
-    val db = mongoClient(user + "_" + repo + "_" + branch)
-    val coll = db("system_indexes_defect_density_"+groupBy)
+    val db = mongoClient(user + "_" + repo + "_" + branch+"_1")
+    val coll = db("defect_density_"+groupBy)
     val result = coll.findOne(MongoDBObject("id" -> "1")).toList map(y => {
       y.getAs[String]("defectDensity").getOrElse("")})
 
