@@ -21,7 +21,8 @@ libraryDependencies ++= {
     "org.specs2"          %%  "specs2-core"   % "2.3.11" % Test,
     "org.reactivemongo" %% "reactivemongo" % "0.11.2",
     "org.mongodb" %% "casbah" % "2.8.1",
-    "org.scalaz" %% "scalaz-core" % "7.0.6"
+    "org.scalaz" %% "scalaz-core" % "7.0.6",
+    "org.apache.camel" % "camel-scala" % "2.10.1"
   )
 }
 
