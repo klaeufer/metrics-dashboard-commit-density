@@ -11,7 +11,7 @@ import org.apache.camel.util.jsse._
 trait MySSLConfig {
   implicit def sslContext: SSLContext = {
     //val keyStoreFile = "/Users/eschow/repo/services/jks/keystore.jks"
-    val keyStoreFile = "/home/shilpika/keys/myjks.jks"
+    val keyStoreFile = "/home/ubuntu/keys/myjks.jks"
 
     val ksp = new KeyStoreParameters()
     ksp.setResource(keyStoreFile);
