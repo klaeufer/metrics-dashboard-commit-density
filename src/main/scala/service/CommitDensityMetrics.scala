@@ -76,11 +76,22 @@ trait CommitDensityService extends HttpService{
   def getDataForDensityMetrics(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
     import com.mongodb.casbah.Imports._
     val mongoClient = MongoClient("localhost", 27017)
-    val db = mongoClient(user + "_" + repo + "_" + branch+"_1")
-    val coll = db("defect_density_"+groupBy)
-    val result = coll.findOne(MongoDBObject("id" -> "1")).toList map(y => {
-      y.getAs[String]("defectDensity").getOrElse("")})
+    //check the tracked DB to see if the repos exist
+    val reponame = user + "_" + repo + "_" + branch
+    val trackedColl = mongoClient("GitTracking")("RepoNames")
+    val allDocs = trackedColl.find()
+    println( allDocs )
+    val dbExists = allDocs.filter(_("repo_name").toString.equalsIgnoreCase(reponame)).toList
 
+    //get the result if repo is tracked
+    val result =if(!dbExists.isEmpty) {
+      val repositoryName = dbExists(0)("repo_name")
+      val db = mongoClient(repositoryName + "_1")
+      val coll = db("defect_density_" + groupBy)
+      coll.findOne(MongoDBObject("id" -> "1")).toList map (_.getAs[String]("defectDensity").getOrElse(""))
+    }else{
+      List("""{"error" : "The repository isn't being tracked yet. Please submit a request for tracking the repository"}""")
+    }
     Future{result(0).parseJson}
   }
 
@@ -98,7 +109,7 @@ trait CommitDensityService extends HttpService{
 
 
 
-  val myRoute = path(Segment / Segment / Segment) { ( user, repo, branch) =>
+  val myRoute = path("density" / Segment / Segment / Segment) { ( user, repo, branch) =>
     get {
         optionalHeaderValueByName("Authorization") { (accessToken) =>
           jsonpWithParameter("jsonp") {
