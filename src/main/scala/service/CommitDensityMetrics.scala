@@ -5,6 +5,7 @@ import java.time.temporal.TemporalAdjusters
 import java.time.{Duration, Instant, ZoneId, ZonedDateTime}
 import akka.actor.Actor
 import akka.util.Timeout
+import com.mongodb.casbah.Imports
 import com.mongodb.casbah.Imports._
 import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.bson.{BSONDocument, BSONDocumentReader}
@@ -71,17 +72,20 @@ object IssueInfo{
 
 trait CommitDensityService extends HttpService{
 
-
-
-  def getDataForDensityMetrics(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
-    import com.mongodb.casbah.Imports._
+  def findTrackedRepo(user: String, repo: String, branch: String): (MongoClient, List[Imports.DBObject]) = {
     val mongoClient = MongoClient("localhost", 27017)
     //check the tracked DB to see if the repos exist
     val reponame = user + "_" + repo + "_" + branch
     val trackedColl = mongoClient("GitTracking")("RepoNames")
     val allDocs = trackedColl.find()
-    println( allDocs )
+    println(allDocs)
     val dbExists = allDocs.filter(_("repo_name").toString.equalsIgnoreCase(reponame)).toList
+    (mongoClient, dbExists)
+  }
+
+  def getDataForDensityMetrics(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
+    import com.mongodb.casbah.Imports._
+    val (mongoClient: MongoClient, dbExists: List[Imports.DBObject]) = findTrackedRepo(user, repo, branch)
 
     //get the result if repo is tracked
     val result =if(!dbExists.isEmpty) {
@@ -95,13 +99,20 @@ trait CommitDensityService extends HttpService{
     Future{result(0).parseJson}
   }
 
+
   def dataForIssueSpoilage(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
     import com.mongodb.casbah.Imports._
-    val mongoClient = MongoClient("localhost", 27017)
-    val db = mongoClient(user + "_" + repo + "_" + branch+"_1")
-    val coll = db("issue_spoilage_"+groupBy)
-    val result = coll.findOne(MongoDBObject("id" -> "2")).toList map(y => {
-      y.getAs[String]("issueSpoilage").getOrElse("")})
+
+    val (mongoClient: MongoClient, dbExists: List[Imports.DBObject]) = findTrackedRepo(user, repo, branch)
+
+    val result =if(!dbExists.isEmpty) {
+      val repositoryName = dbExists(0)("repo_name")
+      val db = mongoClient(repositoryName + "_1")
+      val coll = db("issue_spoilage_" + groupBy)
+      coll.findOne(MongoDBObject("id" -> "2")).toList map (_.getAs[String]("issueSpoilage").getOrElse(""))
+    }else{
+      List("""{"error" : "The repository isn't being tracked yet. Please submit a request for tracking the repository"}""")
+    }
 
     Future{result(0).parseJson}
   }
