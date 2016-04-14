@@ -10,7 +10,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.Properties
 
-object Boot extends App with MySSLConfig/*with CommitDensityService*/{
+object Boot extends App /*with MySSLConfig with CommitDensityService*/{
 
   implicit val system = ActorSystem("gitCommitDensity")
   val service = system.actorOf(Props[MyServiceActor],"git-file-commit-density")
