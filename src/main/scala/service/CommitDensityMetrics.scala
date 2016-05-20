@@ -42,6 +42,14 @@ object JsonPProtocolSpoilage{
   implicit val gitResult = jsonFormat(JsonPResultSpoilage,"issueSpoilage")
 }
 
+case class JsonPResultProductivity(productivity: JsValue)
+
+object JsonPProtocolProductivity{
+  import spray.json.DefaultJsonProtocol._
+  implicit val gitResult = jsonFormat(JsonPResultProductivity,"productivity")
+}
+
+
 case class CommitInfo(date: String,loc: Int, filename: String, rangeLoc: Long)
 
 object CommitInfo{
@@ -117,7 +125,34 @@ trait CommitDensityService extends HttpService{
     Future{result(0).parseJson}
   }
 
+  def dataForProductivity(user: String, repo: String, branch:String, groupBy: String): Future[JsValue] ={
+    import com.mongodb.casbah.Imports._
 
+    val (mongoClient: MongoClient, dbExists: List[Imports.DBObject]) = findTrackedRepo(user, repo, branch)
+
+    val result =if(!dbExists.isEmpty) {
+      val repositoryName = dbExists(0)("repo_name")
+      val db = mongoClient(repositoryName + "_1")
+      val coll = db("productivity_" + groupBy)
+      val metric = coll.findOne(MongoDBObject("id" -> "3")).toList map (_.getAs[String]("productivity").getOrElse(""))
+      //getFilteredResult(None,None,metric(0))
+      metric(0).parseJson
+    }else{
+     """{"error" : "The repository isn't being tracked yet. Please submit a request for tracking the repository"}""".parseJson
+    }
+
+    Future{result}
+  }
+
+
+  /*def getFilteredResult(since: Option[String], until:Option[String], metric: String): JsValue ={
+    (since, until) match{
+      case (None, None)             => metric.parseJson
+      case (Some(start), None)      => if(metric.contains("start_date:"+start))
+      case (None, Some(end))        =>
+      case (Some(start), Some(end)) =>
+    }
+  }*/
 
 
   val myRoute = path("density" / Segment / Segment / Segment) { ( user, repo, branch) =>
@@ -129,7 +164,7 @@ trait CommitDensityService extends HttpService{
             parameters('groupBy ? "week") {(groupBy) =>
               onComplete(getDataForDensityMetrics(user, repo, branch, groupBy)) {
                 case Success(value) => complete(JsonPResult(value))
-                case Failure(value) => complete("Request to github failed with value : " + value)
+                case Failure(value) => complete("Request for issue density failed with value : " + value)
 
               }
             }
@@ -145,7 +180,23 @@ trait CommitDensityService extends HttpService{
           parameters('groupBy ? "week") {(groupBy) =>
             onComplete(dataForIssueSpoilage(user, repo, branch, groupBy)) {
               case Success(value) => complete(JsonPResultSpoilage(value))
-              case Failure(value) => complete("Request to github failed with value : " + value)
+              case Failure(value) => complete("Request for spoilage failed with value : " + value)
+
+            }
+          }
+        }
+      }
+    }
+  }~ path("productivity" /Segment / Segment / Segment) { ( user, repo, branch) =>
+    get {
+      optionalHeaderValueByName("Authorization") { (accessToken) =>
+        jsonpWithParameter("jsonp") {
+          import JsonPProtocolProductivity._
+          import spray.httpx.SprayJsonSupport._
+          parameters('groupBy ? "week") {(groupBy) =>
+            onComplete(dataForProductivity(user, repo, branch, groupBy)) {
+              case Success(value) => complete(JsonPResultProductivity(value))
+              case Failure(value) => complete("Request for productivity failed with value : " + value)
 
             }
           }
