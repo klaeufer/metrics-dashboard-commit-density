@@ -8,7 +8,7 @@
 
 1. Store this token in `~/githubAccessToken` and `~/tokens_all`.
 
-1. To ingest the data for a repository, run an instance of the [storage service](https://github.com/sshilpika/metrics-dashboard-storage-service) like so.
+1. To ingest the data for a repository, run an instance of the [storage/ingestion service](https://github.com/sshilpika/metrics-dashboard-storage-service) like so.
 
         sbt 'runMain edu.luc.cs.metrics.ingestion.service.Boot'
         1. Issues
