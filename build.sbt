@@ -22,7 +22,8 @@ libraryDependencies ++= {
     "org.reactivemongo" %% "reactivemongo" % "0.11.2",
     "org.mongodb" %% "casbah" % "3.1.1",
     "org.scalaz" %% "scalaz-core" % "7.0.6",
-    "org.apache.camel" % "camel-scala" % "2.10.1"
+    "org.apache.camel" % "camel-scala" % "2.10.1",
+    "org.slf4j" % "slf4j-simple" % "1.7.25"
   )
 }
 
