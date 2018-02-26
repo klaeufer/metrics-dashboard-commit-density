@@ -13,7 +13,6 @@
         sbt 'runMain edu.luc.cs.metrics.ingestion.service.Boot'
 	1. Issues
 	2. Commits
-        
 	1
 	[INFO] [02/26/2018 00:18:23.859] [run-main-0] [package$(akka://gitDefectDensity)] 
 	Enter username/reponame/branchname
@@ -22,7 +21,6 @@
 	Username: klaeufer 
 	Reponame: meetup-client-scala 
 	Branchname: master
-        
 	[INFO] [02/26/2018 00:18:32.226] [run-main-0] [package$(akka://gitDefectDensity)] Ingestion Service started
         ...
         Success:!!!! Issues for meetup-client-scala  Saved in DB
@@ -32,7 +30,6 @@
         sbt 'runMain edu.luc.cs.metrics.ingestion.service.Boot'
 	1. Issues
 	2. Commits
-        
 	2
 	[INFO] [02/26/2018 00:22:18.974] [run-main-0] [package$(akka://gitDefectDensity)] 
 	Enter username/reponame/branchname
@@ -41,7 +38,6 @@
 	Username: klaeufer 
 	Reponame: meetup-client-scala 
 	Branchname: master
-        
 	[INFO] [02/26/2018 00:22:26.181] [run-main-0] [package$(akka://gitDefectDensity)] Ingestion Service started
         ...
         Storing tracked Db name for meetup-client-scala
