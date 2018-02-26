@@ -26,6 +26,6 @@ libraryDependencies ++= {
   )
 }
 
-mainClass in assembly := Some("edu.luc.cs.metrics.defect.density.service.Boot")
+mainClass in Compile := Some("edu.luc.cs.metrics.defect.density.service.Boot")
 
 enablePlugins(JavaAppPackaging)
