@@ -11,14 +11,38 @@
 1. To ingest the data for a repository, run an instance of the [storage service](https://github.com/sshilpika/metrics-dashboard-storage-service) like so.
 
         sbt 'runMain edu.luc.cs.metrics.ingestion.service.Boot'
-        1. Issues
+	1. Issues
+	2. Commits
+
+	1
+	[INFO] [02/26/2018 00:18:23.859] [run-main-0] [package$(akka://gitDefectDensity)] 
+	Enter username/reponame/branchname
+	klaeufer/meetup-client-scala/master
+	[INFO] [02/26/2018 00:18:32.016] [run-main-0] [package$(akka://gitDefectDensity)] You entered: 
+	Username: klaeufer 
+	Reponame: meetup-client-scala 
+	Branchname: master
+
+	[INFO] [02/26/2018 00:18:32.226] [run-main-0] [package$(akka://gitDefectDensity)] Ingestion Service started
         ...
         Success:!!!! Issues for meetup-client-scala  Saved in DB
 
     and again via
 
         sbt 'runMain edu.luc.cs.metrics.ingestion.service.Boot'
-        2. Commits
+	1. Issues
+	2. Commits
+
+	2
+	[INFO] [02/26/2018 00:22:18.974] [run-main-0] [package$(akka://gitDefectDensity)] 
+	Enter username/reponame/branchname
+	klaeufer/meetup-client-scala/master
+	[INFO] [02/26/2018 00:22:25.999] [run-main-0] [package$(akka://gitDefectDensity)] You entered: 
+	Username: klaeufer 
+	Reponame: meetup-client-scala 
+	Branchname: master
+
+	[INFO] [02/26/2018 00:22:26.181] [run-main-0] [package$(akka://gitDefectDensity)] Ingestion Service started
         ...
         Storing tracked Db name for meetup-client-scala
 
