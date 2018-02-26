@@ -50,7 +50,7 @@
 
         curl -i localhost:880/spoilage/klaeufer/meetup-client-scala/master\?groupBy=week
 
-    and you should see a bunch of JSON responses (productivity doesn't work).
+    and you should see a bunch of JSON responses (productivity isn't yet implemented).
 
     If you see
 
