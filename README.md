@@ -46,9 +46,9 @@
 
 1. Then use an HTTP client to access the desired resources:
 
-        curl -i localhost:880/density/klaeufer/meetup-client-scala/master\?groupBy=week
+        curl -i localhost:8080/density/klaeufer/meetup-client-scala/master\?groupBy=week
 
-        curl -i localhost:880/spoilage/klaeufer/meetup-client-scala/master\?groupBy=week
+        curl -i localhost:8080/spoilage/klaeufer/meetup-client-scala/master\?groupBy=week
 
     and you should see a bunch of JSON responses (productivity isn't yet implemented).
 
